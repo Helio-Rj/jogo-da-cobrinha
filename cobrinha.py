@@ -1,135 +1,197 @@
-import turtle
-import time
+import pygame
 import random
+import sys
 
-delay = 0.1
+# Ligar o motor do Pygame
+pygame.init()
 
-# 1. Configuração da Tela do Jogo
-tela = turtle.Screen()
-tela.title("Jogo da Cobrinha")
-tela.bgcolor("green")  # Cor do fundo (gramado)
-tela.setup(width=600, height=600)
-tela.tracer(0)  # Desliga a atualização automática da tela para o jogo rodar suave
+# Dimensões do ecrã e tamanho dos blocos
+LARGURA = 600
+ALTURA = 600
+TAMANHO = 20
 
-# 2. Cabeça da Cobra
-cabeca = turtle.Turtle()
-cabeca.speed(0)
-cabeca.shape("square")
-cabeca.color("black")
-cabeca.penup()
-cabeca.goto(0, 0)
-cabeca.direction = "stop"
+ecra = pygame.display.set_mode((LARGURA, ALTURA))
+pygame.display.set_caption("Cobrinha: Paredes Infinitas & Maçã Real")
+relogio = pygame.time.Clock()
 
-# 3. Comida da Cobra
-comida = turtle.Turtle()
-comida.speed(0)
-comida.shape("circle")
-comida.color("red")
-comida.penup()
-comida.goto(0, 100)
-
-corpo = []  # Lista que vai guardar os pedaços da cobra
+# Cores (R, G, B)
+VERDE_GRAMA = (34, 139, 34)
+PRETO = (0, 0, 0)
+VERMELHO = (220, 0, 0)
+BRANCO = (255, 255, 255)
+MARROM = (139, 69, 19)  # Para o cabo da maçã
+VERDE_FOLHA = (50, 205, 50)  # Para a folha da maçã
 
 
-# 4. Funções para controlar a direção
-def ir_cima():
-    if cabeca.direction != "down":
-        cabeca.direction = "up"
+# --- FUNÇÕES DE DESENHO ---
+
+def desenhar_maca_realista(x, y):
+    # O centro do quadrado da comida
+    cx = x + TAMANHO // 2
+
+    # 1. O corpo da maçã (um círculo ligeiramente achatado)
+    # Usamos ellipse para não ser uma bola perfeita
+    pygame.draw.ellipse(ecra, VERMELHO, (x, y + 2, TAMANHO, TAMANHO - 3))
+
+    # 2. O cabinho marrom no topo
+    pygame.draw.line(ecra, MARROM, (cx, y + 2), (cx, y - 5), 3)
+
+    # 3. Uma pequena folha verde ao lado do cabo
+    pygame.draw.ellipse(ecra, VERDE_FOLHA, (cx, y - 6, 8, 5))
 
 
-def ir_baixo():
-    if cabeca.direction != "up":
-        cabeca.direction = "down"
+def desenhar_cabeca(x, y, direcao):
+    cx = x + TAMANHO // 2
+    cy = y + TAMANHO // 2
+
+    pygame.draw.circle(ecra, PRETO, (cx, cy), TAMANHO // 2)
+
+    if direcao == "PARADA": direcao = "DIREITA"
+
+    if direcao == 'DIREITA':
+        olho1, olho2 = (cx + 2, cy - 4), (cx + 2, cy + 4)
+        l_inicio, l_meio = (cx + TAMANHO // 2, cy), (cx + TAMANHO // 2 + 8, cy)
+        l_ponta1, l_ponta2 = (cx + TAMANHO // 2 + 12, cy - 4), (cx + TAMANHO // 2 + 12, cy + 4)
+    elif direcao == 'ESQUERDA':
+        olho1, olho2 = (cx - 2, cy - 4), (cx - 2, cy + 4)
+        l_inicio, l_meio = (cx - TAMANHO // 2, cy), (cx - TAMANHO // 2 - 8, cy)
+        l_ponta1, l_ponta2 = (cx - TAMANHO // 2 - 12, cy - 4), (cx - TAMANHO // 2 - 12, cy + 4)
+    elif direcao == 'CIMA':
+        olho1, olho2 = (cx - 4, cy - 2), (cx + 4, cy - 2)
+        l_inicio, l_meio = (cx, cy - TAMANHO // 2), (cx, cy - TAMANHO // 2 - 8)
+        l_ponta1, l_ponta2 = (cx - 4, cy - TAMANHO // 2 - 12), (cx + 4, cy - TAMANHO // 2 - 12)
+    elif direcao == 'BAIXO':
+        olho1, olho2 = (cx - 4, cy + 2), (cx + 4, cy + 2)
+        l_inicio, l_meio = (cx, cy + TAMANHO // 2), (cx, cy + TAMANHO // 2 + 8)
+        l_ponta1, l_ponta2 = (cx - 4, cy + TAMANHO // 2 + 12), (cx + 4, cy + TAMANHO // 2 + 12)
+
+    pygame.draw.circle(ecra, BRANCO, olho1, 3)
+    pygame.draw.circle(ecra, BRANCO, olho2, 3)
+    pygame.draw.circle(ecra, PRETO, olho1, 1)
+    pygame.draw.circle(ecra, PRETO, olho2, 1)
+    pygame.draw.line(ecra, VERMELHO, l_inicio, l_meio, 2)
+    pygame.draw.line(ecra, VERMELHO, l_meio, l_ponta1, 2)
+    pygame.draw.line(ecra, VERMELHO, l_meio, l_ponta2, 2)
 
 
-def ir_esquerda():
-    if cabeca.direction != "right":
-        cabeca.direction = "left"
+def desenhar_rabo(x, y, x_ant, y_ant, cor):
+    cx = x + TAMANHO // 2
+    cy = y + TAMANHO // 2
+    if x_ant > x:
+        pontos = [(x + TAMANHO, y), (x + TAMANHO, y + TAMANHO), (x, cy)]
+    elif x_ant < x:
+        pontos = [(x, y), (x, y + TAMANHO), (x + TAMANHO, cy)]
+    elif y_ant > y:
+        pontos = [(x, y + TAMANHO), (x + TAMANHO, y + TAMANHO), (cx, y)]
+    else:
+        pontos = [(x, y), (x + TAMANHO, y), (cx, y + TAMANHO)]
+    pygame.draw.polygon(ecra, cor, pontos)
 
 
-def ir_direita():
-    if cabeca.direction != "left":
-        cabeca.direction = "right"
+# --- LÓGICA DO JOGO ---
+
+def reiniciar_jogo():
+    global cobra, cores_corpo, direcao_atual, dx, dy, comidas_comidas, comida_x, comida_y
+    cobra = [(300, 300)]
+    cores_corpo = []
+    direcao_atual = "PARADA"
+    dx, dy = 0, 0
+    comidas_comidas = 0
+    sortear_comida()
 
 
-def mover():
-    if cabeca.direction == "up":
-        y = cabeca.ycor()
-        cabeca.sety(y + 20)
-    if cabeca.direction == "down":
-        y = cabeca.ycor()
-        cabeca.sety(y - 20)
-    if cabeca.direction == "left":
-        x = cabeca.xcor()
-        cabeca.setx(x - 20)
-    if cabeca.direction == "right":
-        x = cabeca.xcor()
-        cabeca.setx(x + 20)
+def sortear_comida():
+    global comida_x, comida_y
+    comida_x = random.randrange(0, LARGURA, TAMANHO)
+    comida_y = random.randrange(0, ALTURA, TAMANHO)
 
 
-# 5. Configurando o Teclado (Usando as Setas)
-tela.listen()
-tela.onkeypress(ir_cima, "Up")
-tela.onkeypress(ir_baixo, "Down")
-tela.onkeypress(ir_esquerda, "Left")
-tela.onkeypress(ir_direita, "Right")
+reiniciar_jogo()
 
-# 6. O "Coração" do Jogo (Loop principal)
-while True:
-    tela.update()
+rodando = True
+while rodando:
+    relogio.tick(10)
 
-    # Verifica se bateu nas paredes
-    if cabeca.xcor() > 290 or cabeca.xcor() < -290 or cabeca.ycor() > 290 or cabeca.ycor() < -290:
-        time.sleep(1)
-        cabeca.goto(0, 0)
-        cabeca.direction = "stop"
+    for evento in pygame.event.get():
+        if evento.type == pygame.QUIT:
+            rodando = False
 
-        # Esconde os pedaços antigos do corpo
-        for pedaco in corpo:
-            pedaco.goto(1000, 1000)
-        corpo.clear()
+        if evento.type == pygame.KEYDOWN:
+            if evento.key == pygame.K_UP and direcao_atual != "BAIXO":
+                direcao_atual = "CIMA"
+                dx, dy = 0, -TAMANHO
+            elif evento.key == pygame.K_DOWN and direcao_atual != "CIMA":
+                direcao_atual = "BAIXO"
+                dx, dy = 0, TAMANHO
+            elif evento.key == pygame.K_LEFT and direcao_atual != "DIREITA":
+                direcao_atual = "ESQUERDA"
+                dx, dy = -TAMANHO, 0
+            elif evento.key == pygame.K_RIGHT and direcao_atual != "ESQUERDA":
+                direcao_atual = "DIREITA"
+                dx, dy = TAMANHO, 0
 
-    # Verifica se a cobra "comeu" a comida
-    if cabeca.distance(comida) < 20:
-        # Move a comida para um lugar aleatório
-        x = random.randint(-280, 280)
-        y = random.randint(-280, 280)
-        comida.goto(x, y)
+    if direcao_atual != "PARADA":
+        # Calcula onde será a nova cabeça
+        nx = cobra[0][0] + dx
+        ny = cobra[0][1] + dy
 
-        # Adiciona um novo pedaço ao corpo (alternando as cores do Flamengo)
-        novo_pedaco = turtle.Turtle()
-        novo_pedaco.speed(0)
-        novo_pedaco.shape("square")
-        if len(corpo) % 2 == 0:
-            novo_pedaco.color("red")
+        # --- LÓGICA DAS PAREDES INFINITAS (TELETRANSPORTE) ---
+        if nx < 0:
+            nx = LARGURA - TAMANHO  # Saiu pela esquerda, aparece na direita
+        elif nx >= LARGURA:
+            nx = 0  # Saiu pela direita, aparece na esquerda
+
+        if ny < 0:
+            ny = ALTURA - TAMANHO  # Saiu por cima, aparece em baixo
+        elif ny >= ALTURA:
+            ny = 0  # Saiu por baixo, aparece em cima
+
+        nova_cabeca = (nx, ny)
+        # -----------------------------------------------------
+
+        # Bater no próprio corpo (ainda morre se bater nela mesma)
+        if nova_cabeca in cobra:
+            pygame.time.wait(1000)
+            reiniciar_jogo()
+            continue
+
+        cobra.insert(0, nova_cabeca)
+
+        # Verificar se comeu
+        if nova_cabeca[0] == comida_x and nova_cabeca[1] == comida_y:
+            if comidas_comidas % 2 == 0:
+                cores_corpo.append(VERMELHO)
+            else:
+                cores_corpo.append(PRETO)
+            comidas_comidas += 1
+            sortear_comida()
         else:
-            novo_pedaco.color("black")
-        novo_pedaco.penup()
-        corpo.append(novo_pedaco)
+            cobra.pop()
 
-    # Faz o corpo seguir a cabeça
-    for index in range(len(corpo) - 1, 0, -1):
-        x = corpo[index - 1].xcor()
-        y = corpo[index - 1].ycor()
-        corpo[index].goto(x, y)
+    # --- DESENHAR O ECRÃ ---
+    ecra.fill(VERDE_GRAMA)
 
-    if len(corpo) > 0:
-        x = cabeca.xcor()
-        y = cabeca.ycor()
-        corpo[0].goto(x, y)
+    # Desenhar a Comida atual
+    if comidas_comidas % 2 == 0:
+        # Agora chama a função da maçã realista!
+        desenhar_maca_realista(comida_x, comida_y)
+    else:
+        # Chocolate continua quadrado preto
+        pygame.draw.rect(ecra, PRETO, (comida_x, comida_y, TAMANHO, TAMANHO))
 
-    mover()
+    # Desenhar o Corpo
+    for i in range(len(cobra) - 1, 0, -1):
+        x, y = cobra[i]
+        cor_atual = cores_corpo[i - 1]
+        if i == len(cobra) - 1 and len(cobra) > 1:
+            desenhar_rabo(x, y, cobra[i - 1][0], cobra[i - 1][1], cor_atual)
+        else:
+            pygame.draw.rect(ecra, cor_atual, (x, y, TAMANHO, TAMANHO))
 
-    # Verifica se a cobra bateu no próprio corpo
-    for pedaco in corpo:
-        if pedaco.distance(cabeca) < 20:
-            time.sleep(1)
-            cabeca.goto(0, 0)
-            cabeca.direction = "stop"
-            for pedaco in corpo:
-                pedaco.goto(1000, 1000)
-            corpo.clear()
+    # Desenhar a Cabeça
+    desenhar_cabeca(cobra[0][0], cobra[0][1], direcao_atual)
 
-    time.sleep(delay)
+    pygame.display.flip()
 
-tela.mainloop()
+pygame.quit()
+sys.exit()
