@@ -1,49 +1,107 @@
 import pygame
 import random
 import sys
+import os
 
-# Ligar o motor do Pygame
 pygame.init()
 
-# Dimensões do ecrã e tamanho dos blocos
 LARGURA = 600
 ALTURA = 600
 TAMANHO = 20
 
 ecra = pygame.display.set_mode((LARGURA, ALTURA))
-pygame.display.set_caption("Cobrinha: Paredes Infinitas & Maçã Real")
+pygame.display.set_caption("Cobrinha: Degradê e Recordes")
 relogio = pygame.time.Clock()
 
-# Cores (R, G, B)
-VERDE_GRAMA = (34, 139, 34)
+# Cores
 PRETO = (0, 0, 0)
 VERMELHO = (220, 0, 0)
 BRANCO = (255, 255, 255)
-MARROM = (139, 69, 19)  # Para o cabo da maçã
-VERDE_FOLHA = (50, 205, 50)  # Para a folha da maçã
+MARROM = (139, 69, 19)
+VERDE_FOLHA = (50, 205, 50)
+CINZA = (128, 128, 128)
+AMARELO = (255, 215, 0)
+
+ARQUIVO_RECORDE = "recorde.txt"
+
+
+# --- FUNÇÕES DO RECORDE ---
+def ler_recorde():
+    if os.path.exists(ARQUIVO_RECORDE):
+        with open(ARQUIVO_RECORDE, "r") as f:
+            return int(f.read())
+    return 0
+
+
+def salvar_recorde(novo_recorde):
+    with open(ARQUIVO_RECORDE, "w") as f:
+        f.write(str(novo_recorde))
+
+
+def tela_game_over(pontos):
+    recorde_atual = ler_recorde()
+    novo_recorde_batido = False
+
+    if pontos > recorde_atual:
+        recorde_atual = pontos
+        salvar_recorde(recorde_atual)
+        novo_recorde_batido = True
+
+    esperando = True
+    fonte_titulo = pygame.font.SysFont(None, 70)
+    fonte_texto = pygame.font.SysFont(None, 40)
+
+    ecra.fill(PRETO)
+
+    texto_fim = fonte_titulo.render("FIM DE JOGO", True, VERMELHO)
+    texto_pontos = fonte_texto.render(f"Sua Pontuação: {pontos}", True, BRANCO)
+    texto_recorde = fonte_texto.render(f"Recorde Histórico: {recorde_atual}", True, AMARELO)
+    texto_aviso = fonte_texto.render("Pressione ESPAÇO para tentar de novo", True, CINZA)
+
+    ecra.blit(texto_fim, (LARGURA // 2 - texto_fim.get_width() // 2, 120))
+    ecra.blit(texto_pontos, (LARGURA // 2 - texto_pontos.get_width() // 2, 250))
+    ecra.blit(texto_recorde, (LARGURA // 2 - texto_recorde.get_width() // 2, 300))
+
+    if novo_recorde_batido:
+        texto_parabens = fonte_texto.render("NOVO RECORDE!", True, VERDE_FOLHA)
+        ecra.blit(texto_parabens, (LARGURA // 2 - texto_parabens.get_width() // 2, 350))
+
+    ecra.blit(texto_aviso, (LARGURA // 2 - texto_aviso.get_width() // 2, 500))
+    pygame.display.flip()
+
+    while esperando:
+        relogio.tick(15)
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if evento.type == pygame.KEYDOWN:
+                if evento.key == pygame.K_SPACE:
+                    esperando = False
 
 
 # --- FUNÇÕES DE DESENHO ---
+def desenhar_fundo_degrade():
+    # Desenha 600 linhas horizontais misturando as cores
+    for y in range(ALTURA):
+        p = y / ALTURA
+        # Do Azul Céu (135, 206, 235) para o Verde Grama (34, 139, 34)
+        r = int(135 + (34 - 135) * p)
+        g = int(206 + (139 - 206) * p)
+        b = int(235 + (34 - 235) * p)
+        pygame.draw.line(ecra, (r, g, b), (0, y), (LARGURA, y))
+
 
 def desenhar_maca_realista(x, y):
-    # O centro do quadrado da comida
     cx = x + TAMANHO // 2
-
-    # 1. O corpo da maçã (um círculo ligeiramente achatado)
-    # Usamos ellipse para não ser uma bola perfeita
     pygame.draw.ellipse(ecra, VERMELHO, (x, y + 2, TAMANHO, TAMANHO - 3))
-
-    # 2. O cabinho marrom no topo
     pygame.draw.line(ecra, MARROM, (cx, y + 2), (cx, y - 5), 3)
-
-    # 3. Uma pequena folha verde ao lado do cabo
     pygame.draw.ellipse(ecra, VERDE_FOLHA, (cx, y - 6, 8, 5))
 
 
 def desenhar_cabeca(x, y, direcao):
     cx = x + TAMANHO // 2
     cy = y + TAMANHO // 2
-
     pygame.draw.circle(ecra, PRETO, (cx, cy), TAMANHO // 2)
 
     if direcao == "PARADA": direcao = "DIREITA"
@@ -89,7 +147,6 @@ def desenhar_rabo(x, y, x_ant, y_ant, cor):
 
 
 # --- LÓGICA DO JOGO ---
-
 def reiniciar_jogo():
     global cobra, cores_corpo, direcao_atual, dx, dy, comidas_comidas, comida_x, comida_y
     cobra = [(300, 300)]
@@ -102,8 +159,9 @@ def reiniciar_jogo():
 
 def sortear_comida():
     global comida_x, comida_y
-    comida_x = random.randrange(0, LARGURA, TAMANHO)
-    comida_y = random.randrange(0, ALTURA, TAMANHO)
+    # A comida agora sorteia respeitando o limite da borda cinza
+    comida_x = random.randrange(TAMANHO, LARGURA - TAMANHO, TAMANHO)
+    comida_y = random.randrange(TAMANHO, ALTURA - TAMANHO, TAMANHO)
 
 
 reiniciar_jogo()
@@ -131,33 +189,30 @@ while rodando:
                 dx, dy = TAMANHO, 0
 
     if direcao_atual != "PARADA":
-        # Calcula onde será a nova cabeça
         nx = cobra[0][0] + dx
         ny = cobra[0][1] + dy
 
-        # --- LÓGICA DAS PAREDES INFINITAS (TELETRANSPORTE) ---
-        if nx < 0:
-            nx = LARGURA - TAMANHO  # Saiu pela esquerda, aparece na direita
-        elif nx >= LARGURA:
-            nx = 0  # Saiu pela direita, aparece na esquerda
+        # Teletransporte ajustado por causa da borda cinza
+        if nx < TAMANHO:
+            nx = LARGURA - TAMANHO * 2
+        elif nx >= LARGURA - TAMANHO:
+            nx = TAMANHO
 
-        if ny < 0:
-            ny = ALTURA - TAMANHO  # Saiu por cima, aparece em baixo
-        elif ny >= ALTURA:
-            ny = 0  # Saiu por baixo, aparece em cima
+        if ny < TAMANHO:
+            ny = ALTURA - TAMANHO * 2
+        elif ny >= ALTURA - TAMANHO:
+            ny = TAMANHO
 
         nova_cabeca = (nx, ny)
-        # -----------------------------------------------------
 
-        # Bater no próprio corpo (ainda morre se bater nela mesma)
+        # O Fim de Jogo acontece EXCLUSIVAMENTE se a cobra morder ela mesma
         if nova_cabeca in cobra:
-            pygame.time.wait(1000)
+            tela_game_over(comidas_comidas)
             reiniciar_jogo()
             continue
 
         cobra.insert(0, nova_cabeca)
 
-        # Verificar se comeu
         if nova_cabeca[0] == comida_x and nova_cabeca[1] == comida_y:
             if comidas_comidas % 2 == 0:
                 cores_corpo.append(VERMELHO)
@@ -169,17 +224,17 @@ while rodando:
             cobra.pop()
 
     # --- DESENHAR O ECRÃ ---
-    ecra.fill(VERDE_GRAMA)
+    desenhar_fundo_degrade()
 
-    # Desenhar a Comida atual
+    # Desenhar a Borda Cinza por cima do fundo (Espessura = TAMANHO)
+    pygame.draw.rect(ecra, CINZA, (0, 0, LARGURA, ALTURA), TAMANHO)
+
+    # Desenhar Comida e Corpo
     if comidas_comidas % 2 == 0:
-        # Agora chama a função da maçã realista!
         desenhar_maca_realista(comida_x, comida_y)
     else:
-        # Chocolate continua quadrado preto
         pygame.draw.rect(ecra, PRETO, (comida_x, comida_y, TAMANHO, TAMANHO))
 
-    # Desenhar o Corpo
     for i in range(len(cobra) - 1, 0, -1):
         x, y = cobra[i]
         cor_atual = cores_corpo[i - 1]
@@ -188,7 +243,6 @@ while rodando:
         else:
             pygame.draw.rect(ecra, cor_atual, (x, y, TAMANHO, TAMANHO))
 
-    # Desenhar a Cabeça
     desenhar_cabeca(cobra[0][0], cobra[0][1], direcao_atual)
 
     pygame.display.flip()
