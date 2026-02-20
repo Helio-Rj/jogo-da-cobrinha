@@ -1,5 +1,6 @@
 import pygame
 import random
+import obstaculos
 import sys
 import os
 
@@ -24,6 +25,8 @@ AMARELO = (255, 215, 0)
 
 ARQUIVO_RECORDE = "recorde.txt"
 
+# lista de obstáculos
+obstaculos_lista = []
 
 # --- FUNÇÕES DO RECORDE ---
 def ler_recorde():
@@ -82,10 +85,8 @@ def tela_game_over(pontos):
 
 # --- FUNÇÕES DE DESENHO ---
 def desenhar_fundo_degrade():
-    # Desenha 600 linhas horizontais misturando as cores
     for y in range(ALTURA):
         p = y / ALTURA
-        # Do Azul Céu (135, 206, 235) para o Verde Grama (34, 139, 34)
         r = int(135 + (34 - 135) * p)
         g = int(206 + (139 - 206) * p)
         b = int(235 + (34 - 235) * p)
@@ -104,62 +105,39 @@ def desenhar_cabeca(x, y, direcao):
     cy = y + TAMANHO // 2
     pygame.draw.circle(ecra, PRETO, (cx, cy), TAMANHO // 2)
 
-    if direcao == "PARADA": direcao = "DIREITA"
+    if direcao == "PARADA":
+        direcao = "DIREITA"
 
     if direcao == 'DIREITA':
         olho1, olho2 = (cx + 2, cy - 4), (cx + 2, cy + 4)
-        l_inicio, l_meio = (cx + TAMANHO // 2, cy), (cx + TAMANHO // 2 + 8, cy)
-        l_ponta1, l_ponta2 = (cx + TAMANHO // 2 + 12, cy - 4), (cx + TAMANHO // 2 + 12, cy + 4)
     elif direcao == 'ESQUERDA':
         olho1, olho2 = (cx - 2, cy - 4), (cx - 2, cy + 4)
-        l_inicio, l_meio = (cx - TAMANHO // 2, cy), (cx - TAMANHO // 2 - 8, cy)
-        l_ponta1, l_ponta2 = (cx - TAMANHO // 2 - 12, cy - 4), (cx - TAMANHO // 2 - 12, cy + 4)
     elif direcao == 'CIMA':
         olho1, olho2 = (cx - 4, cy - 2), (cx + 4, cy - 2)
-        l_inicio, l_meio = (cx, cy - TAMANHO // 2), (cx, cy - TAMANHO // 2 - 8)
-        l_ponta1, l_ponta2 = (cx - 4, cy - TAMANHO // 2 - 12), (cx + 4, cy - TAMANHO // 2 - 12)
-    elif direcao == 'BAIXO':
+    else:
         olho1, olho2 = (cx - 4, cy + 2), (cx + 4, cy + 2)
-        l_inicio, l_meio = (cx, cy + TAMANHO // 2), (cx, cy + TAMANHO // 2 + 8)
-        l_ponta1, l_ponta2 = (cx - 4, cy + TAMANHO // 2 + 12), (cx + 4, cy + TAMANHO // 2 + 12)
 
     pygame.draw.circle(ecra, BRANCO, olho1, 3)
     pygame.draw.circle(ecra, BRANCO, olho2, 3)
     pygame.draw.circle(ecra, PRETO, olho1, 1)
     pygame.draw.circle(ecra, PRETO, olho2, 1)
-    pygame.draw.line(ecra, VERMELHO, l_inicio, l_meio, 2)
-    pygame.draw.line(ecra, VERMELHO, l_meio, l_ponta1, 2)
-    pygame.draw.line(ecra, VERMELHO, l_meio, l_ponta2, 2)
 
 
-def desenhar_rabo(x, y, x_ant, y_ant, cor):
-    cx = x + TAMANHO // 2
-    cy = y + TAMANHO // 2
-    if x_ant > x:
-        pontos = [(x + TAMANHO, y), (x + TAMANHO, y + TAMANHO), (x, cy)]
-    elif x_ant < x:
-        pontos = [(x, y), (x, y + TAMANHO), (x + TAMANHO, cy)]
-    elif y_ant > y:
-        pontos = [(x, y + TAMANHO), (x + TAMANHO, y + TAMANHO), (cx, y)]
-    else:
-        pontos = [(x, y), (x + TAMANHO, y), (cx, y + TAMANHO)]
-    pygame.draw.polygon(ecra, cor, pontos)
-
-
-# --- LÓGICA DO JOGO ---
 def reiniciar_jogo():
-    global cobra, cores_corpo, direcao_atual, dx, dy, comidas_comidas, comida_x, comida_y
+    global cobra, cores_corpo, direcao_atual, dx, dy, comidas_comidas, comida_x, comida_y, obstaculos_lista
+
     cobra = [(300, 300)]
     cores_corpo = []
     direcao_atual = "PARADA"
     dx, dy = 0, 0
     comidas_comidas = 0
+    obstaculos_lista = []
+
     sortear_comida()
 
 
 def sortear_comida():
     global comida_x, comida_y
-    # A comida agora sorteia respeitando o limite da borda cinza
     comida_x = random.randrange(TAMANHO, LARGURA - TAMANHO, TAMANHO)
     comida_y = random.randrange(TAMANHO, ALTURA - TAMANHO, TAMANHO)
 
@@ -168,7 +146,10 @@ reiniciar_jogo()
 
 rodando = True
 while rodando:
-    relogio.tick(10)
+
+    velocidade_base = 10
+    velocidade = velocidade_base + comidas_comidas
+    relogio.tick(velocidade)
 
     for evento in pygame.event.get():
         if evento.type == pygame.QUIT:
@@ -192,7 +173,6 @@ while rodando:
         nx = cobra[0][0] + dx
         ny = cobra[0][1] + dy
 
-        # Teletransporte ajustado por causa da borda cinza
         if nx < TAMANHO:
             nx = LARGURA - TAMANHO * 2
         elif nx >= LARGURA - TAMANHO:
@@ -205,44 +185,44 @@ while rodando:
 
         nova_cabeca = (nx, ny)
 
-        # O Fim de Jogo acontece EXCLUSIVAMENTE se a cobra morder ela mesma
+        # colisão com corpo
         if nova_cabeca in cobra:
             tela_game_over(comidas_comidas)
             reiniciar_jogo()
             continue
 
+        # colisão com obstáculos
+        for ox, oy, _ in obstaculos_lista:
+            if (nx, ny) == (ox, oy):
+                tela_game_over(comidas_comidas)
+                reiniciar_jogo()
+                continue
+
         cobra.insert(0, nova_cabeca)
 
-        if nova_cabeca[0] == comida_x and nova_cabeca[1] == comida_y:
-            if comidas_comidas % 2 == 0:
-                cores_corpo.append(VERMELHO)
-            else:
-                cores_corpo.append(PRETO)
+        if nova_cabeca == (comida_x, comida_y):
+            cores_corpo.append(VERMELHO if comidas_comidas % 2 == 0 else PRETO)
             comidas_comidas += 1
             sortear_comida()
+
+            if comidas_comidas % 2 == 0:
+                novo = obstaculos.adicionar_obstaculo(
+                    cobra, comida_x, comida_y, LARGURA, ALTURA
+                )
+                obstaculos_lista.append(novo)
         else:
             cobra.pop()
 
-    # --- DESENHAR O ECRÃ ---
     desenhar_fundo_degrade()
-
-    # Desenhar a Borda Cinza por cima do fundo (Espessura = TAMANHO)
     pygame.draw.rect(ecra, CINZA, (0, 0, LARGURA, ALTURA), TAMANHO)
 
-    # Desenhar Comida e Corpo
-    if comidas_comidas % 2 == 0:
-        desenhar_maca_realista(comida_x, comida_y)
-    else:
-        pygame.draw.rect(ecra, PRETO, (comida_x, comida_y, TAMANHO, TAMANHO))
+    desenhar_maca_realista(comida_x, comida_y)
 
     for i in range(len(cobra) - 1, 0, -1):
         x, y = cobra[i]
-        cor_atual = cores_corpo[i - 1]
-        if i == len(cobra) - 1 and len(cobra) > 1:
-            desenhar_rabo(x, y, cobra[i - 1][0], cobra[i - 1][1], cor_atual)
-        else:
-            pygame.draw.rect(ecra, cor_atual, (x, y, TAMANHO, TAMANHO))
+        pygame.draw.rect(ecra, cores_corpo[i - 1], (x, y, TAMANHO, TAMANHO))
 
+    obstaculos.desenhar_obstaculos(ecra, obstaculos_lista)
     desenhar_cabeca(cobra[0][0], cobra[0][1], direcao_atual)
 
     pygame.display.flip()
